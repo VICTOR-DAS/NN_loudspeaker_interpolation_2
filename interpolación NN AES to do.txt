@@ -1,0 +1,29 @@
+
+
+Corrección del error con Tilka: fuera del entrenamiento y dentro. Lo utilizo en crossover design
+
+
+Hacerlo también incluyendo theta=90º: Prácticamente no se nota
+
+Hacer un test con algo que no sea un array: no mejora
+Repetir con más datos: pendiente
+
+
+https://medium.datadriveninvestor.com/an-overview-on-u-net-architecture-d6caabf7caa4
+
+hacer con fase
+comsol simulaciones: ya nombrado
+
+
+
+
+Repasar las otras en casa para coger referencias correctas con las fechas
+
+Pedir cambio de título
+Pedir pagar conferencia por la empresa
+Meter en la conclusión arquitecturas u-net más modernas
+Dibujo Lu de la u-net
+
+
+
+

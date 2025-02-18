@@ -1,0 +1,1762 @@
+import os
+os.environ['TF_DETERMINISTIC_OPS'] = '1'
+
+
+# Build U-Net model
+inputs = Input((IMG_HEIGHT, IMG_WIDTH, IMG_CHANNELS))
+s = Lambda(lambda x: x / 1) (inputs)
+
+# kernell_size=(5,5)
+from tensorflow.keras.initializers import HeNormal
+from tensorflow.keras.initializers import GlorotNormal
+
+# Establecer la semilla para NumPy
+np.random.seed(1)
+
+# Establecer la semilla para TensorFlow (backend de Keras)
+tf.random.set_seed(1)
+
+initializer=HeNormal (seed=1)
+
+c1 = Conv2D(8, (1500,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (s)
+# c1 = Dropout(0.1) (c1)
+#c1 = Conv2D(8, (74,3), activation='elu', kernel_initializer=initializer, padding='same') (c1)
+p1 = MaxPooling2D((2, 2)) (c1)
+
+c2 = Conv2D(16, (750,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (p1)
+# c2 = Dropout(0.1) (c2)
+#c2 = Conv2D(16, (74,3), activation='elu', kernel_initializer=initializer, padding='same') (c2)
+p2 = MaxPooling2D((4, 1)) (c2)
+
+c3 = Conv2D(32, (74,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (p2)
+# c3 = Dropout(0.2) (c3)
+#c3 = Conv2D(32, (74,3), activation='elu', kernel_initializer=initializer, padding='same') (c3)
+p3 = MaxPooling2D((3, 2)) (c3)
+
+c4 = Conv2D(64, (74,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (p3)
+# 4 = Dropout(0.2) (c4)
+#c4 = Conv2D(64, (74,3), activation='elu', kernel_initializer=initializer, padding='same') (c4)
+p4 = MaxPooling2D(pool_size=(3, 1)) (c4)
+
+c5 = Conv2D(128, (74,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (p4)
+
+
+u6 = Conv2DTranspose(64, (74,3), strides=(3, 1),  padding='same', kernel_initializer=initializer) (c5)
+#u6 = Conv2DTranspose(32, (74,3), strides=(3, 1),  padding='same', kernel_initializer=initializer) (p4)
+u6 = concatenate([u6, c4])
+c6 = Conv2D(64, (74,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u6)
+# c6 = Dropout(0.2) (c6)
+#c6 = Conv2D(64, (74,3), activation='elu', kernel_initializer=initializer, padding='same') (c6)
+
+u7 = Conv2DTranspose(32, (74,3), strides=(3, 2),  padding='same', kernel_initializer=initializer) (c6)
+u7 = concatenate([u7, c3])
+c7 = Conv2D(32, (74,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u7)
+# c7 = Dropout(0.2) (c7)
+#c7 = Conv2D(32, (74,3), activation='elu', kernel_initializer=initializer, padding='same') (c7)
+
+u8 = Conv2DTranspose(16, (74,3), strides=(4, 1),  padding='same', kernel_initializer=initializer) (c7)
+u8 = concatenate([u8, c2])
+c8 = Conv2D(16, (74,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u8)
+# c8 = Dropout(0.1) (c8)
+#c8 = Conv2D(16, (74,3), kernel_initializer=initializer, activation='elu', padding='same') (c8)
+
+u9 = Conv2DTranspose(8, (74,3), strides=(2, 2),  padding='same', kernel_initializer=initializer) (c8)
+u9 = concatenate([u9, c1], axis=3)
+c9 = Conv2D(8, (74,3),   activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer,  padding='same') (u9)
+# c9 = Dropout(0.1) (c9)
+#c9 = Conv2D(8, (74,3), kernel_initializer=initializer, activation='elu', padding='same') (c9)
+
+# outputs = Conv2D(8, (74,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), padding='same') (c9)
+
+
+
+# Conexión directa entre la entrada y la salida
+direct_connection = concatenate([s, c9])
+
+# Última capa de salida
+outputs = Conv2D(1, (74,3), padding='same',  activation='softplus', kernel_initializer=initializer) (direct_connection)
+
+
+model = Model(inputs=[inputs], outputs=[outputs])
+#optimizer = Adam(learning_rate=0.001)
+#model.compile(optimizer=optimizer, loss='mean_squared_error', metrics=['mse'])
+model.summary()
+
+-------
+
+Epoch 00020: val_loss improved from 0.01771 to 0.01560,
+Epoch 00050: val_loss did not improve from 0.00680
+
+Mean Squared Error on Train Data: 0.0040204665
+Mean Squared Error on Validation Data: 0.0041631474
+Mean Squared Error on Test Data: 0.004646919
+
+**************
+
+Con la misma red que la anterior y datos normales, no en espiral, sale peor
+
+
+
+
+
+
++++++++++
+a partir de aquí con todos los datos (train, val and test) normalizados en bloque entre 0 y 1
+
+import os
+os.environ['TF_DETERMINISTIC_OPS'] = '1'
+import tensorflow as tf
+from tensorflow.keras.layers import Input, Conv2D, MaxPooling2D, Conv2DTranspose, concatenate, Lambda, BatchNormalization
+from tensorflow.keras.models import Model
+
+# Build U-Net model
+inputs = Input((IMG_HEIGHT, IMG_WIDTH, IMG_CHANNELS))
+s = Lambda(lambda x: x / 1) (inputs)
+
+from tensorflow.keras.initializers import HeNormal
+
+# Establecer la semilla para NumPy
+np.random.seed(1)
+
+# Establecer la semilla para TensorFlow (backend de Keras)
+tf.random.set_seed(1)
+
+initializer = HeNormal(seed=1)
+
+c1 = Conv2D(8, (1500,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (s)
+#c1 = BatchNormalization()(c1)  # Añade Batch Normalization aquí
+p1 = MaxPooling2D((2, 2)) (c1)
+
+c2 = Conv2D(16, (750,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (p1)
+#c2 = BatchNormalization()(c2)  # Añade Batch Normalization aquí
+p2 = MaxPooling2D((4, 1)) (c2)
+
+c3 = Conv2D(32, (74,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (p2)
+#c3 = Dropout(0.1) (c3)
+#c3 = BatchNormalization()(c3)  # Añade Batch Normalization aquí
+p3 = MaxPooling2D((3, 2)) (c3)
+
+c4 = Conv2D(64, (74,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (p3)
+#c4 = BatchNormalization()(c4)  # Añade Batch Normalization aquí
+p4 = MaxPooling2D(pool_size=(3, 1)) (c4)
+
+c5 = Conv2D(128, (74,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (p4)
+
+u6 = Conv2DTranspose(64, (74,3), strides=(3, 1),  padding='same', kernel_initializer=initializer) (c5)
+u6 = concatenate([u6, c4])
+c6 = Conv2D(64, (74,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u6)
+#c6 = Dropout(0.1) (c6)
+#c6 = BatchNormalization()(c6)  # Añade Batch Normalization aquí
+
+u7 = Conv2DTranspose(32, (74,3), strides=(3, 2),  padding='same', kernel_initializer=initializer) (c6)
+u7 = concatenate([u7, c3])
+c7 = Conv2D(32, (74,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u7)
+#c7 = BatchNormalization()(c7)  # Añade Batch Normalization aquí
+
+u8 = Conv2DTranspose(16, (74,3), strides=(4, 1),  padding='same', kernel_initializer=initializer) (c7)
+u8 = concatenate([u8, c2])
+c8 = Conv2D(16, (74,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u8)
+#c8 = BatchNormalization()(c8)  # Añade Batch Normalization aquí
+
+u9 = Conv2DTranspose(8, (74,3), strides=(2, 2),  padding='same', kernel_initializer=initializer) (c8)
+u9 = concatenate([u9, c1], axis=3)
+c9 = Conv2D(8, (74,3),   activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer,  padding='same') (u9)
+#c9 = BatchNormalization()(c9)  # Añade Batch Normalization aquí
+
+# Conexión directa entre la entrada y la salida
+direct_connection = concatenate([s, c9])
+
+# Última capa de salida
+outputs = Conv2D(1, (74,3), padding='same',  activation='sigmoid', kernel_initializer=initializer) (direct_connection)
+
+model = Model(inputs=[inputs], outputs=[outputs])
+model.summary()
+
+
+Epoch 00020: val_loss improved from 0.00990 to 0.00944,
+Epoch 00050: val_loss improved from 0.00450 to 0.00448,
+
+Mean Squared Error on Train Data: 0.0027612138
+Mean Squared Error on Validation Data: 0.0030248894
+Mean Squared Error on Test Data: 0.003529426
+
+
+
+++++++++++++
+
+import os
+os.environ['TF_DETERMINISTIC_OPS'] = '1'
+import tensorflow as tf
+from tensorflow.keras.layers import Input, Conv2D, MaxPooling2D, Conv2DTranspose, concatenate, Lambda, BatchNormalization
+from tensorflow.keras.models import Model
+
+# Build U-Net model
+inputs = Input((IMG_HEIGHT, IMG_WIDTH, IMG_CHANNELS))
+s = Lambda(lambda x: x / 1) (inputs)
+
+from tensorflow.keras.initializers import HeNormal
+
+# Establecer la semilla para NumPy
+np.random.seed(1)
+
+# Establecer la semilla para TensorFlow (backend de Keras)
+tf.random.set_seed(1)
+
+initializer = HeNormal(seed=1)
+
+c1 = Conv2D(8, (74,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (s)
+#c1 = BatchNormalization()(c1)  # Añade Batch Normalization aquí
+p1 = MaxPooling2D((2, 2)) (c1)
+
+c2 = Conv2D(16, (74,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (p1)
+#c2 = BatchNormalization()(c2)  # Añade Batch Normalization aquí
+p2 = MaxPooling2D((4, 1)) (c2)
+
+c3 = Conv2D(32, (74,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (p2)
+#c3 = Dropout(0.1) (c3)
+#c3 = BatchNormalization()(c3)  # Añade Batch Normalization aquí
+p3 = MaxPooling2D((3, 2)) (c3)
+
+c4 = Conv2D(64, (74,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (p3)
+#c4 = BatchNormalization()(c4)  # Añade Batch Normalization aquí
+p4 = MaxPooling2D(pool_size=(3, 1)) (c4)
+
+c5 = Conv2D(128, (74,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (p4)
+
+u6 = Conv2DTranspose(64, (74,3), strides=(3, 1),  padding='same', kernel_initializer=initializer) (c5)
+u6 = concatenate([u6, c4])
+c6 = Conv2D(64, (74,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u6)
+#c6 = Dropout(0.1) (c6)
+#c6 = BatchNormalization()(c6)  # Añade Batch Normalization aquí
+
+u7 = Conv2DTranspose(32, (74,3), strides=(3, 2),  padding='same', kernel_initializer=initializer) (c6)
+u7 = concatenate([u7, c3])
+c7 = Conv2D(32, (74,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u7)
+#c7 = BatchNormalization()(c7)  # Añade Batch Normalization aquí
+
+u8 = Conv2DTranspose(16, (74,3), strides=(4, 1),  padding='same', kernel_initializer=initializer) (c7)
+u8 = concatenate([u8, c2])
+c8 = Conv2D(16, (74,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u8)
+#c8 = BatchNormalization()(c8)  # Añade Batch Normalization aquí
+
+u9 = Conv2DTranspose(8, (74,3), strides=(2, 2),  padding='same', kernel_initializer=initializer) (c8)
+u9 = concatenate([u9, c1], axis=3)
+c9 = Conv2D(8, (74,3),   activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer,  padding='same') (u9)
+#c9 = BatchNormalization()(c9)  # Añade Batch Normalization aquí
+
+# Conexión directa entre la entrada y la salida
+direct_connection = concatenate([s, c9])
+
+# Última capa de salida
+outputs = Conv2D(1, (74,3), padding='same',  activation='sigmoid', kernel_initializer=initializer) (direct_connection)
+
+model = Model(inputs=[inputs], outputs=[outputs])
+model.summary()
+
+
+Epoch 00020: val_loss improved from 0.01089 to 0.01026
+Epoch 00050: val_loss did not improve from 0.00472
+
+Mean Squared Error on Train Data: 0.002929998
+Mean Squared Error on Validation Data: 0.0035252774
+Mean Squared Error on Test Data: 0.003891671
+
+++++++++++++
+
+import os
+os.environ['TF_DETERMINISTIC_OPS'] = '1'
+import tensorflow as tf
+from tensorflow.keras.layers import Input, Conv2D, MaxPooling2D, Conv2DTranspose, concatenate, Lambda, BatchNormalization
+from tensorflow.keras.models import Model
+
+# Build U-Net model
+inputs = Input((IMG_HEIGHT, IMG_WIDTH, IMG_CHANNELS))
+s = Lambda(lambda x: x / 1) (inputs)
+
+from tensorflow.keras.initializers import HeNormal
+
+# Establecer la semilla para NumPy
+np.random.seed(1)
+
+# Establecer la semilla para TensorFlow (backend de Keras)
+tf.random.set_seed(1)
+
+initializer = HeNormal(seed=1)
+
+c1 = Conv2D(8, (1500,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (s)
+#c1 = BatchNormalization()(c1)  # Añade Batch Normalization aquí
+p1 = MaxPooling2D((2, 2)) (c1)
+
+c2 = Conv2D(16, (750,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (p1)
+#c2 = BatchNormalization()(c2)  # Añade Batch Normalization aquí
+p2 = MaxPooling2D((4, 1)) (c2)
+
+c3 = Conv2D(32, (74,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (p2)
+#c3 = Dropout(0.1) (c3)
+#c3 = BatchNormalization()(c3)  # Añade Batch Normalization aquí
+p3 = MaxPooling2D((3, 2)) (c3)
+
+c4 = Conv2D(64, (74,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (p3)
+#c4 = BatchNormalization()(c4)  # Añade Batch Normalization aquí
+p4 = MaxPooling2D(pool_size=(3, 1)) (c4)
+
+c5 = Conv2D(128, (74,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (p4)
+
+u6 = Conv2DTranspose(64, (74,3), strides=(3, 1),  padding='same', kernel_initializer=initializer) (c5)
+u6 = concatenate([u6, c4])
+c6 = Conv2D(64, (74,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u6)
+#c6 = Dropout(0.1) (c6)
+#c6 = BatchNormalization()(c6)  # Añade Batch Normalization aquí
+
+u7 = Conv2DTranspose(32, (74,3), strides=(3, 2),  padding='same', kernel_initializer=initializer) (c6)
+u7 = concatenate([u7, c3])
+c7 = Conv2D(32, (74,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u7)
+#c7 = BatchNormalization()(c7)  # Añade Batch Normalization aquí
+
+u8 = Conv2DTranspose(16, (74,3), strides=(4, 1),  padding='same', kernel_initializer=initializer) (c7)
+u8 = concatenate([u8, c2])
+c8 = Conv2D(16, (74,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u8)
+#c8 = BatchNormalization()(c8)  # Añade Batch Normalization aquí
+
+u9 = Conv2DTranspose(8, (74,3), strides=(2, 2),  padding='same', kernel_initializer=initializer) (c8)
+u9 = concatenate([u9, c1], axis=3)
+c9 = Conv2D(8, (74,3),   activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer,  padding='same') (u9)
+#c9 = BatchNormalization()(c9)  # Añade Batch Normalization aquí
+
+# Conexión directa entre la entrada y la salida
+direct_connection = concatenate([s, c9])
+
+# Última capa de salida
+outputs = Conv2D(1, (1,1), padding='same',  activation='sigmoid', kernel_initializer=initializer) (direct_connection)
+
+model = Model(inputs=[inputs], outputs=[outputs])
+model.summary()
+
+Epoch 00020: val_loss improved from 0.00946 to 0.00915
+Epoch 00050: val_loss improved from 0.00402 to 0.00395
+
+Mean Squared Error on Train Data: 0.0036915592
+Mean Squared Error on Validation Data: 0.0037816912
+Mean Squared Error on Test Data: 0.004453507
+
++++++++
+
+import os
+os.environ['TF_DETERMINISTIC_OPS'] = '1'
+import tensorflow as tf
+from tensorflow.keras.layers import Input, Conv2D, MaxPooling2D, Conv2DTranspose, concatenate, Lambda, BatchNormalization
+from tensorflow.keras.models import Model
+
+# Build U-Net model
+inputs = Input((IMG_HEIGHT, IMG_WIDTH, IMG_CHANNELS))
+s = Lambda(lambda x: x / 1) (inputs)
+
+from tensorflow.keras.initializers import HeNormal
+
+# Establecer la semilla para NumPy
+np.random.seed(1)
+
+# Establecer la semilla para TensorFlow (backend de Keras)
+tf.random.set_seed(1)
+
+initializer = HeNormal(seed=1)
+
+c1 = Conv2D(16, (1500,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (s)
+#c1 = BatchNormalization()(c1)  # Añade Batch Normalization aquí
+p1 = MaxPooling2D((2, 2)) (c1)
+
+c2 = Conv2D(32, (750,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (p1)
+#c2 = BatchNormalization()(c2)  # Añade Batch Normalization aquí
+p2 = MaxPooling2D((4, 1)) (c2)
+
+c3 = Conv2D(64, (74,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (p2)
+#c3 = Dropout(0.1) (c3)
+#c3 = BatchNormalization()(c3)  # Añade Batch Normalization aquí
+p3 = MaxPooling2D((3, 2)) (c3)
+
+c4 = Conv2D(128, (74,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (p3)
+#c4 = BatchNormalization()(c4)  # Añade Batch Normalization aquí
+p4 = MaxPooling2D(pool_size=(3, 1)) (c4)
+
+c5 = Conv2D(256, (74,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (p4)
+
+u6 = Conv2DTranspose(128, (74,3), strides=(3, 1),  padding='same', kernel_initializer=initializer) (c5)
+u6 = concatenate([u6, c4])
+c6 = Conv2D(128, (74,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u6)
+#c6 = Dropout(0.1) (c6)
+#c6 = BatchNormalization()(c6)  # Añade Batch Normalization aquí
+
+u7 = Conv2DTranspose(64, (74,3), strides=(3, 2),  padding='same', kernel_initializer=initializer) (c6)
+u7 = concatenate([u7, c3])
+c7 = Conv2D(64, (74,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u7)
+#c7 = BatchNormalization()(c7)  # Añade Batch Normalization aquí
+
+u8 = Conv2DTranspose(32, (74,3), strides=(4, 1),  padding='same', kernel_initializer=initializer) (c7)
+u8 = concatenate([u8, c2])
+c8 = Conv2D(32, (74,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u8)
+#c8 = BatchNormalization()(c8)  # Añade Batch Normalization aquí
+
+u9 = Conv2DTranspose(16, (74,3), strides=(2, 2),  padding='same', kernel_initializer=initializer) (c8)
+u9 = concatenate([u9, c1], axis=3)
+c9 = Conv2D(16, (74,3),   activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer,  padding='same') (u9)
+#c9 = BatchNormalization()(c9)  # Añade Batch Normalization aquí
+
+# Conexión directa entre la entrada y la salida
+direct_connection = concatenate([s, c9])
+
+# Última capa de salida
+outputs = Conv2D(1, (74,3), padding='same',  activation='sigmoid', kernel_initializer=initializer) (direct_connection)
+
+model = Model(inputs=[inputs], outputs=[outputs])
+model.summary()
+
+Epoch 00020: val_loss improved from 0.00831 to 0.00744
+Epoch 00050: val_loss improved from 0.00362 to 0.00344
+
+Mean Squared Error on Train Data: 0.0023430074
+Mean Squared Error on Validation Data: 0.0026815322
+Mean Squared Error on Test Data: 0.0030894892
+
+mejora los on-axis y cerca de on-axis, aunque aún le falta mucho sobre todo ahí. 09-04-2024
+
+probamos lo mismo con más filtros en cada capa y empeora
+
+
+
+
++++++++++++++
+
+12/04/2024
+
+import os
+os.environ['TF_DETERMINISTIC_OPS'] = '1'
+import tensorflow as tf
+from tensorflow.keras.layers import Input, Conv2D, MaxPooling2D, Conv2DTranspose, concatenate, Lambda, BatchNormalization
+from tensorflow.keras.models import Model
+
+# Build U-Net model
+inputs = Input((IMG_HEIGHT, IMG_WIDTH, IMG_CHANNELS))
+s = Lambda(lambda x: x / 1) (inputs)
+
+from tensorflow.keras.initializers import HeNormal
+
+# Establecer la semilla para NumPy
+np.random.seed(1)
+
+# Establecer la semilla para TensorFlow (backend de Keras)
+tf.random.set_seed(1)
+
+initializer = HeNormal(seed=1)
+
+c1 = Conv2D(16, (37,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (s)
+#c1 = BatchNormalization()(c1)  # Añade Batch Normalization aquí
+p1 = MaxPooling2D((2, 2)) (c1)
+
+c2 = Conv2D(32, (37,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (p1)
+#c2 = BatchNormalization()(c2)  # Añade Batch Normalization aquí
+p2 = MaxPooling2D((4, 1)) (c2)
+
+c3 = Conv2D(64, (37,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (p2)
+#c3 = Dropout(0.1) (c3)
+#c3 = BatchNormalization()(c3)  # Añade Batch Normalization aquí
+p3 = MaxPooling2D((3, 2)) (c3)
+
+c4 = Conv2D(128, (37,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (p3)
+#c4 = BatchNormalization()(c4)  # Añade Batch Normalization aquí
+p4 = MaxPooling2D(pool_size=(3, 1)) (c4)
+
+c5 = Conv2D(256, (37,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (p4)
+
+u6 = Conv2DTranspose(128, (37,3), strides=(3, 1),  padding='same', kernel_initializer=initializer) (c5)
+u6 = concatenate([u6, c4])
+c6 = Conv2D(128, (37,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u6)
+#c6 = Dropout(0.1) (c6)
+#c6 = BatchNormalization()(c6)  # Añade Batch Normalization aquí
+
+u7 = Conv2DTranspose(64, (37,3), strides=(3, 2),  padding='same', kernel_initializer=initializer) (c6)
+u7 = concatenate([u7, c3])
+c7 = Conv2D(64, (37,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u7)
+#c7 = BatchNormalization()(c7)  # Añade Batch Normalization aquí
+
+u8 = Conv2DTranspose(32, (37,3), strides=(4, 1),  padding='same', kernel_initializer=initializer) (c7)
+u8 = concatenate([u8, c2])
+c8 = Conv2D(32, (37,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u8)
+#c8 = BatchNormalization()(c8)  # Añade Batch Normalization aquí
+
+u9 = Conv2DTranspose(16, (37,3), strides=(2, 2),  padding='same', kernel_initializer=initializer) (c8)
+u9 = concatenate([u9, c1], axis=3)
+c9 = Conv2D(16, (37,3),   activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer,  padding='same') (u9)
+#c9 = BatchNormalization()(c9)  # Añade Batch Normalization aquí
+
+# Conexión directa entre la entrada y la salida
+direct_connection = concatenate([s, c9])
+
+# Última capa de salida
+outputs = Conv2D(1, (1,1), padding='same',  activation='sigmoid', kernel_initializer=initializer) (direct_connection)
+
+model = Model(inputs=[inputs], outputs=[outputs])
+model.summary()
+
+
+Epoch 00020: val_loss improved from 0.00774 to 0.00753
+Epoch 00050: val_loss improved from 0.00398 to 0.00391
+
+Mean Squared Error on Train Data: 0.003084692
+Mean Squared Error on Validation Data: 0.0031017258
+Mean Squared Error on Test Data: 0.0038837008
+
+
+++++++++++++++++
+
+Pasando el kernell de la capa de salida a 37,3 sale peor
+
+
+
++++++++++++++
+
+import os
+os.environ['TF_DETERMINISTIC_OPS'] = '1'
+import tensorflow as tf
+from tensorflow.keras.layers import Input, Conv2D, MaxPooling2D, Conv2DTranspose, concatenate, Lambda, BatchNormalization
+from tensorflow.keras.models import Model
+
+# Build U-Net model
+inputs = Input((IMG_HEIGHT, IMG_WIDTH, IMG_CHANNELS))
+s = Lambda(lambda x: x / 1) (inputs)
+
+from tensorflow.keras.initializers import HeNormal
+
+# Establecer la semilla para NumPy
+np.random.seed(1)
+
+# Establecer la semilla para TensorFlow (backend de Keras)
+tf.random.set_seed(1)
+
+initializer = HeNormal(seed=1)
+
+
+c1 = Conv2D(16, (3,3), strides=(2,1), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='valid') (s)
+#p1 = c1
+#c1 = Conv2D(16, (74,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (s)
+#c1 = BatchNormalization()(c1)  # Añade Batch Normalization aquí
+#p1 = MaxPooling2D((2, 2)) (c1)
+
+c2 = Conv2D(32, (3,3), strides=(2,2), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='valid') (c1)
+#c2 = BatchNormalization()(c2)  # Añade Batch Normalization aquí
+#p2 = MaxPooling2D((4, 1)) (c2)
+
+c3 = Conv2D(64, (3,3), strides=(2,2), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='valid')  (c2)
+#c3 = Dropout(0.1) (c3)
+#c3 = BatchNormalization()(c3)  # Añade Batch Normalization aquí
+#p3 = MaxPooling2D((3, 2)) (c3)
+
+c4 = Conv2D(128, (3,3), strides=(2,2), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='valid')  (c3)
+#c4 = BatchNormalization()(c4)  # Añade Batch Normalization aquí
+#p4 = MaxPooling2D(pool_size=(3, 1)) (c4)
+
+c5 = Conv2D(256, (3,3), strides=(2,2), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='valid')  (c4)
+#c5 = BatchNormalization()(c5) 
+
+
+u6 = Conv2DTranspose(128, (3,4), strides=(2, 1),  padding='valid',  kernel_initializer=initializer) (c5)
+u6 = concatenate([u6, c4])
+#u6 = Conv2D(128, (40,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u6)
+#c6 = Dropout(0.1) (c6)
+#u6 = BatchNormalization()(u6)  # Añade Batch Normalization aquí
+
+u7 = Conv2DTranspose(64, (4,3), strides=(2, 2),  padding='valid',  kernel_initializer=initializer) (u6)
+u7 = concatenate([u7, c3])
+#u7 = Conv2D(64, (41,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u7)
+#u7 = BatchNormalization()(u7)  # Añade Batch Normalization aquí
+
+u8 = Conv2DTranspose(32, (3,4), strides=(2, 2),  padding='valid', kernel_initializer=initializer) (u7)
+u8 = concatenate([u8, c2])
+#u8 = Conv2D(32, (41,4), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u8)
+#u8 = BatchNormalization()(u8)  # Añade Batch Normalization aquí
+
+u9 = Conv2DTranspose(16, (3,4), strides=(2, 2),  padding='valid',  kernel_initializer=initializer) (u8)
+u9 = concatenate([u9, c1], axis=3)
+#u9 = Conv2D(16, (41,4),   activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer,  padding='same') (u9)
+#u9 = BatchNormalization()(u9)  # Añade Batch Normalization aquí
+
+# Conexión directa entre la entrada y la salida
+#direct_connection = concatenate([s, c9])
+
+# Última capa de salida
+outputs = Conv2DTranspose(1, (4,3), strides=(2, 1),   activation='sigmoid', padding='valid', kernel_initializer=initializer) (u9)
+
+model = Model(inputs=[inputs], outputs=[outputs])
+model.summary()
+
+
+Epoch 00020: val_loss improved from 0.06185 to 0.06031
+Epoch 00050: val_loss improved from 0.03202 to 0.03143
+
+Mean Squared Error on Train Data: 0.004028334
+Mean Squared Error on Validation Data: 0.005080436
+Mean Squared Error on Test Data: 0.005245994
+
+
++++++++++++++
+
+import os
+os.environ['TF_DETERMINISTIC_OPS'] = '1'
+import tensorflow as tf
+from tensorflow.keras.layers import Input, Conv2D, MaxPooling2D, Conv2DTranspose, concatenate, Lambda, BatchNormalization
+from tensorflow.keras.models import Model
+
+# Build U-Net model
+inputs = Input((IMG_HEIGHT, IMG_WIDTH, IMG_CHANNELS))
+s = Lambda(lambda x: x / 1) (inputs)
+
+from tensorflow.keras.initializers import HeNormal
+
+# Establecer la semilla para NumPy
+np.random.seed(1)
+
+# Establecer la semilla para TensorFlow (backend de Keras)
+tf.random.set_seed(1)
+
+initializer = HeNormal(seed=1)
+
+
+c1 = Conv2D(16, (75,3), strides=(2,1), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='valid') (s)
+#p1 = c1
+#c1 = Conv2D(16, (74,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (s)
+#c1 = BatchNormalization()(c1)  # Añade Batch Normalization aquí
+#p1 = MaxPooling2D((2, 2)) (c1)
+
+c2 = Conv2D(32, (75,3), strides=(2,2), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='valid') (c1)
+#c2 = BatchNormalization()(c2)  # Añade Batch Normalization aquí
+#p2 = MaxPooling2D((4, 1)) (c2)
+
+c3 = Conv2D(64, (75,3), strides=(2,2), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='valid')  (c2)
+#c3 = Dropout(0.1) (c3)
+#c3 = BatchNormalization()(c3)  # Añade Batch Normalization aquí
+#p3 = MaxPooling2D((3, 2)) (c3)
+
+c4 = Conv2D(128, (75,3), strides=(2,2), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='valid')  (c3)
+#c4 = BatchNormalization()(c4)  # Añade Batch Normalization aquí
+#p4 = MaxPooling2D(pool_size=(3, 1)) (c4)
+
+c5 = Conv2D(256, (75,3), strides=(2,2), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='valid')  (c4)
+#c5 = BatchNormalization()(c5) 
+
+
+u6 = Conv2DTranspose(128, (76,4), strides=(2, 1),  padding='valid',  kernel_initializer=initializer) (c5)
+u6 = concatenate([u6, c4])
+#u6 = Conv2D(128, (40,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u6)
+#c6 = Dropout(0.1) (c6)
+#u6 = BatchNormalization()(u6)  # Añade Batch Normalization aquí
+
+u7 = Conv2DTranspose(64, (75,3), strides=(2, 2),  padding='valid',  kernel_initializer=initializer) (u6)
+u7 = concatenate([u7, c3])
+#u7 = Conv2D(64, (41,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u7)
+#u7 = BatchNormalization()(u7)  # Añade Batch Normalization aquí
+
+u8 = Conv2DTranspose(32, (75,4), strides=(2, 2),  padding='valid', kernel_initializer=initializer) (u7)
+u8 = concatenate([u8, c2])
+#u8 = Conv2D(32, (41,4), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u8)
+#u8 = BatchNormalization()(u8)  # Añade Batch Normalization aquí
+
+u9 = Conv2DTranspose(16, (75,4), strides=(2, 2),  padding='valid',  kernel_initializer=initializer) (u8)
+u9 = concatenate([u9, c1], axis=3)
+#u9 = Conv2D(16, (41,4),   activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer,  padding='same') (u9)
+#u9 = BatchNormalization()(u9)  # Añade Batch Normalization aquí
+
+# Conexión directa entre la entrada y la salida
+#direct_connection = concatenate([s, c9])
+
+# Última capa de salida
+outputs = Conv2DTranspose(1, (76,3), strides=(2, 1),   activation='sigmoid', padding='valid', kernel_initializer=initializer) (u9)
+
+model = Model(inputs=[inputs], outputs=[outputs])
+model.summary()
+
+Epoch 00020: val_loss did not improve from 0.02061
+Epoch 00050: val_loss improved from 0.01069 to 0.01066
+
+
+Mean Squared Error on Train Data: 0.003290358
+Mean Squared Error on Validation Data: 0.0053881337
+Mean Squared Error on Test Data: 0.004870376
+
+esta va muy bien salvo los bordes
+
+++++++++++++++++++++++++
+
+import os
+os.environ['TF_DETERMINISTIC_OPS'] = '1'
+import tensorflow as tf
+from tensorflow.keras.layers import Input, Conv2D, MaxPooling2D, Conv2DTranspose, concatenate, Lambda, BatchNormalization
+from tensorflow.keras.models import Model
+
+# Build U-Net model
+inputs = Input((IMG_HEIGHT, IMG_WIDTH, IMG_CHANNELS))
+s = Lambda(lambda x: x / 1) (inputs)
+
+from tensorflow.keras.initializers import HeNormal
+
+# Establecer la semilla para NumPy
+np.random.seed(1)
+
+# Establecer la semilla para TensorFlow (backend de Keras)
+tf.random.set_seed(1)
+
+initializer = HeNormal(seed=1)
+
+
+c1 = Conv2D(16, (75,3), strides=(2,1), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='valid') (s)
+#p1 = c1
+#c1 = Conv2D(16, (74,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (s)
+#c1 = BatchNormalization()(c1)  # Añade Batch Normalization aquí
+#p1 = MaxPooling2D((2, 2)) (c1)
+
+c2 = Conv2D(32, (75,3), strides=(2,2), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='valid') (c1)
+#c2 = BatchNormalization()(c2)  # Añade Batch Normalization aquí
+#p2 = MaxPooling2D((4, 1)) (c2)
+
+c3 = Conv2D(64, (75,3), strides=(2,2), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='valid')  (c2)
+#c3 = Dropout(0.1) (c3)
+#c3 = BatchNormalization()(c3)  # Añade Batch Normalization aquí
+#p3 = MaxPooling2D((3, 2)) (c3)
+
+c4 = Conv2D(128, (75,3), strides=(2,2), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='valid')  (c3)
+#c4 = BatchNormalization()(c4)  # Añade Batch Normalization aquí
+#p4 = MaxPooling2D(pool_size=(3, 1)) (c4)
+
+c5 = Conv2D(256, (75,3), strides=(2,2), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='valid')  (c4)
+#c5 = BatchNormalization()(c5) 
+
+
+u6 = Conv2DTranspose(128, (76,4), strides=(2, 1),  padding='valid',  kernel_initializer=initializer) (c5)
+u6 = concatenate([u6, c4])
+#u6 = Conv2D(128, (40,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u6)
+#c6 = Dropout(0.1) (c6)
+#u6 = BatchNormalization()(u6)  # Añade Batch Normalization aquí
+
+u7 = Conv2DTranspose(64, (75,3), strides=(2, 2),  padding='valid',  kernel_initializer=initializer) (u6)
+u7 = concatenate([u7, c3])
+#u7 = Conv2D(64, (41,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u7)
+#u7 = BatchNormalization()(u7)  # Añade Batch Normalization aquí
+
+u8 = Conv2DTranspose(32, (75,4), strides=(2, 2),  padding='valid', kernel_initializer=initializer) (u7)
+u8 = concatenate([u8, c2])
+#u8 = Conv2D(32, (41,4), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u8)
+#u8 = BatchNormalization()(u8)  # Añade Batch Normalization aquí
+
+u9 = Conv2DTranspose(16, (75,4), strides=(2, 2),  padding='valid',  kernel_initializer=initializer) (u8)
+u9 = concatenate([u9, c1], axis=3)
+u9 = Conv2DTranspose(16, (76,3), strides=(2, 1),  padding='valid',  kernel_initializer=initializer) (u9)
+#u9 = Conv2D(16, (41,4),   activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer,  padding='same') (u9)
+#u9 = BatchNormalization()(u9)  # Añade Batch Normalization aquí
+
+# Conexión directa entre la entrada y la salida
+direct_connection = concatenate([u9, s])
+
+# Última capa de salida
+outputs = Conv2D(1, (1,1), activation='sigmoid', padding='same', kernel_initializer=initializer) (direct_connection)
+
+model = Model(inputs=[inputs], outputs=[outputs])
+model.summary()
+
+Epoch 00020: val_loss improved from 0.01302 to 0.01248
+Epoch 00050: val_loss improved from 0.00717 to 0.00708
+
+Mean Squared Error on Train Data: 0.0026194202
+Mean Squared Error on Validation Data: 0.0045425114
+Mean Squared Error on Test Data: 0.0039954274
+
+va muy bien salvo los bordes
+
++++++++++++++
+
+import os
+os.environ['TF_DETERMINISTIC_OPS'] = '1'
+import tensorflow as tf
+from tensorflow.keras.layers import Input, Conv2D, MaxPooling2D, Conv2DTranspose, concatenate, Lambda, BatchNormalization
+from tensorflow.keras.models import Model
+
+# Build U-Net model
+inputs = Input((IMG_HEIGHT, IMG_WIDTH, IMG_CHANNELS))
+s = Lambda(lambda x: x / 1) (inputs)
+
+from tensorflow.keras.initializers import HeNormal
+
+# Establecer la semilla para NumPy
+np.random.seed(1)
+
+# Establecer la semilla para TensorFlow (backend de Keras)
+tf.random.set_seed(1)
+
+initializer = HeNormal(seed=1)
+
+
+c1 = Conv2D(16, (75,3), strides=(2,1), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='valid') (s)
+#p1 = c1
+#c1 = Conv2D(16, (74,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (s)
+#c1 = BatchNormalization()(c1)  # Añade Batch Normalization aquí
+#p1 = MaxPooling2D((2, 2)) (c1)
+
+c2 = Conv2D(32, (75,3), strides=(2,2), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='valid') (c1)
+#c2 = BatchNormalization()(c2)  # Añade Batch Normalization aquí
+#p2 = MaxPooling2D((4, 1)) (c2)
+
+c3 = Conv2D(64, (75,3), strides=(2,2), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='valid')  (c2)
+#c3 = Dropout(0.1) (c3)
+#c3 = BatchNormalization()(c3)  # Añade Batch Normalization aquí
+#p3 = MaxPooling2D((3, 2)) (c3)
+
+c4 = Conv2D(128, (75,3), strides=(2,2), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='valid')  (c3)
+#c4 = BatchNormalization()(c4)  # Añade Batch Normalization aquí
+#p4 = MaxPooling2D(pool_size=(3, 1)) (c4)
+
+c5 = Conv2D(256, (75,3), strides=(2,2), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='valid')  (c4)
+#c5 = BatchNormalization()(c5) 
+
+
+u6 = Conv2DTranspose(128, (76,4), strides=(2, 1),  padding='valid',  kernel_initializer=initializer) (c5)
+u6 = concatenate([u6, c4])
+#u6 = Conv2D(128, (40,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u6)
+#c6 = Dropout(0.1) (c6)
+#u6 = BatchNormalization()(u6)  # Añade Batch Normalization aquí
+
+u7 = Conv2DTranspose(64, (75,3), strides=(2, 2),  padding='valid',  kernel_initializer=initializer) (u6)
+u7 = concatenate([u7, c3])
+#u7 = Conv2D(64, (41,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u7)
+#u7 = BatchNormalization()(u7)  # Añade Batch Normalization aquí
+
+u8 = Conv2DTranspose(32, (75,4), strides=(2, 2),  padding='valid', kernel_initializer=initializer) (u7)
+u8 = concatenate([u8, c2])
+#u8 = Conv2D(32, (41,4), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u8)
+#u8 = BatchNormalization()(u8)  # Añade Batch Normalization aquí
+
+u9 = Conv2DTranspose(16, (75,4), strides=(2, 2),  padding='valid',  kernel_initializer=initializer) (u8)
+u9 = concatenate([u9, c1], axis=3)
+u9 = Conv2DTranspose(16, (76,3), strides=(2, 1),  padding='valid',  kernel_initializer=initializer) (u9)
+#u9 = Conv2D(16, (41,4),   activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer,  padding='same') (u9)
+#u9 = BatchNormalization()(u9)  # Añade Batch Normalization aquí
+
+# Conexión directa entre la entrada y la salida
+direct_connection = concatenate([u9, s])
+
+# Última capa de salida
+outputs = Conv2D(1, (75,4), activation='sigmoid', padding='same', kernel_initializer=initializer) (direct_connection)
+
+model = Model(inputs=[inputs], outputs=[outputs])
+model.summary()
+
+Epoch 00020: val_loss improved from 0.01169 to 0.01126
+Epoch 00050: val_loss did not improve from 0.00653
+
+Mean Squared Error on Train Data: 0.002187201
+Mean Squared Error on Validation Data: 0.0039705555
+Mean Squared Error on Test Data: 0.0035189837
+
+muy bien salvo los bordes
+------------ Esta de momento a 23-4-2024
+duplicando los filtros en cada capa va peor
+poniendo el filtro de la última capa a 1,1 va peor
+poniendo otra conv2d después de cada una de las de encoder va peor
+
+
+
+++++++++++++++++
+
+import os
+os.environ['TF_DETERMINISTIC_OPS'] = '1'
+import tensorflow as tf
+from tensorflow.keras.layers import Input, Conv2D, MaxPooling2D, Conv2DTranspose, concatenate, Lambda, BatchNormalization
+from tensorflow.keras.models import Model
+
+# Build U-Net model
+inputs = Input((IMG_HEIGHT, IMG_WIDTH, IMG_CHANNELS))
+s = Lambda(lambda x: x / 1) (inputs)
+
+from tensorflow.keras.initializers import HeNormal
+
+# Establecer la semilla para NumPy
+np.random.seed(1)
+
+# Establecer la semilla para TensorFlow (backend de Keras)
+tf.random.set_seed(1)
+
+initializer = HeNormal(seed=1)
+
+c1 = Conv2D(16, (75,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (s)
+c1 = Conv2D(16, (75,3), strides=(2,1), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='valid') (c1)
+#p1 = c1
+#c1 = Conv2D(16, (74,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (s)
+#c1 = BatchNormalization()(c1)  # Añade Batch Normalization aquí
+#p1 = MaxPooling2D((2, 2)) (c1)
+
+c2 = Conv2D(32, (75,3), strides=(2,2), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='valid') (c1)
+#c2 = BatchNormalization()(c2)  # Añade Batch Normalization aquí
+#p2 = MaxPooling2D((4, 1)) (c2)
+
+c3 = Conv2D(64, (75,3), strides=(2,2), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='valid')  (c2)
+#c3 = Dropout(0.1) (c3)
+#c3 = BatchNormalization()(c3)  # Añade Batch Normalization aquí
+#p3 = MaxPooling2D((3, 2)) (c3)
+
+c4 = Conv2D(128, (75,3), strides=(2,2), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='valid')  (c3)
+#c4 = BatchNormalization()(c4)  # Añade Batch Normalization aquí
+#p4 = MaxPooling2D(pool_size=(3, 1)) (c4)
+
+c5 = Conv2D(256, (75,3), strides=(2,2), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='valid')  (c4)
+#c5 = BatchNormalization()(c5) 
+
+
+u6 = Conv2DTranspose(128, (76,4), strides=(2, 1),  padding='valid',  kernel_initializer=initializer) (c5)
+u6 = concatenate([u6, c4])
+#u6 = Conv2D(128, (40,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u6)
+#c6 = Dropout(0.1) (c6)
+#u6 = BatchNormalization()(u6)  # Añade Batch Normalization aquí
+
+u7 = Conv2DTranspose(64, (75,3), strides=(2, 2),  padding='valid',  kernel_initializer=initializer) (u6)
+u7 = concatenate([u7, c3])
+#u7 = Conv2D(64, (41,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u7)
+#u7 = BatchNormalization()(u7)  # Añade Batch Normalization aquí
+
+u8 = Conv2DTranspose(32, (75,4), strides=(2, 2),  padding='valid', kernel_initializer=initializer) (u7)
+u8 = concatenate([u8, c2])
+#u8 = Conv2D(32, (41,4), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u8)
+#u8 = BatchNormalization()(u8)  # Añade Batch Normalization aquí
+
+u9 = Conv2DTranspose(16, (75,4), strides=(2, 2),  padding='valid',  kernel_initializer=initializer) (u8)
+u9 = concatenate([u9, c1], axis=3)
+u9 = Conv2DTranspose(16, (76,3), strides=(2, 1),  padding='valid',  kernel_initializer=initializer) (u9)
+#u9 = Conv2D(16, (41,4),   activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer,  padding='same') (u9)
+#u9 = BatchNormalization()(u9)  # Añade Batch Normalization aquí
+
+# Conexión directa entre la entrada y la salida
+direct_connection = concatenate([u9, s])
+
+# Última capa de salida
+outputs = Conv2D(1, (75,4), activation='sigmoid', padding='same', kernel_initializer=initializer) (direct_connection)
+
+model = Model(inputs=[inputs], outputs=[outputs])
+model.summary()
+
+Epoch 00020: val_loss improved from 0.01222 to 0.01197
+Epoch 00050: val_loss improved from 0.00722 to 0.00703
+
+Mean Squared Error on Train Data: 0.0022042214
+Mean Squared Error on Validation Data: 0.003926743
+Mean Squared Error on Test Data: 0.003455292
+
+
+++++++++++++++++++++++++
+
+
+import os
+os.environ['TF_DETERMINISTIC_OPS'] = '1'
+import tensorflow as tf
+from tensorflow.keras.layers import Input, Conv2D, MaxPooling2D, Conv2DTranspose, concatenate, Lambda, BatchNormalization
+from tensorflow.keras.models import Model
+
+# Build U-Net model
+inputs = Input((IMG_HEIGHT, IMG_WIDTH, IMG_CHANNELS))
+s = Lambda(lambda x: x / 1) (inputs)
+
+from tensorflow.keras.initializers import HeNormal
+
+# Establecer la semilla para NumPy
+np.random.seed(1)
+
+# Establecer la semilla para TensorFlow (backend de Keras)
+tf.random.set_seed(1)
+
+initializer = HeNormal(seed=1)
+
+c1 = Conv2D(16, (3,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (s)
+c1 = Conv2D(16, (3,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (c1)
+#c1 = BatchNormalization()(c1)  # Añade Batch Normalization aquí
+p1 = MaxPooling2D((2, 2)) (c1)
+
+c2 = Conv2D(32, (3,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (p1)
+c2 = Conv2D(32, (3,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (c2)
+#c2 = BatchNormalization()(c2)  # Añade Batch Normalization aquí
+p2 = MaxPooling2D((4, 1)) (c2)
+
+c3 = Conv2D(64, (3,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (p2)
+c3 = Conv2D(64, (3,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (c3)
+#c3 = Dropout(0.1) (c3)
+#c3 = BatchNormalization()(c3)  # Añade Batch Normalization aquí
+p3 = MaxPooling2D((3, 2)) (c3)
+
+c4 = Conv2D(128, (3,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (p3)
+c4 = Conv2D(128, (3,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (c4)
+#c4 = BatchNormalization()(c4)  # Añade Batch Normalization aquí
+p4 = MaxPooling2D(pool_size=(3, 1)) (c4)
+
+c5 = Conv2D(256, (3,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (p4)
+c5 = Conv2D(256, (3,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (c5)
+
+u6 = Conv2DTranspose(128, (2,2), strides=(3, 1),  padding='same', kernel_initializer=initializer) (c5)
+u6 = concatenate([u6, c4])
+c6 = Conv2D(128, (3,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u6)
+c6 = Conv2D(128, (3,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (c6)
+#c6 = Dropout(0.1) (c6)
+#c6 = BatchNormalization()(c6)  # Añade Batch Normalization aquí
+
+u7 = Conv2DTranspose(64, (2,2), strides=(3, 2),  padding='same', kernel_initializer=initializer) (c6)
+u7 = concatenate([u7, c3])
+c7 = Conv2D(64, (3,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u7)
+c7 = Conv2D(64, (3,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (c7)
+#c7 = BatchNormalization()(c7)  # Añade Batch Normalization aquí
+
+u8 = Conv2DTranspose(32, (2,2), strides=(4, 1),  padding='same', kernel_initializer=initializer) (c7)
+u8 = concatenate([u8, c2])
+c8 = Conv2D(32, (3,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u8)
+c8 = Conv2D(32, (3,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (c8)
+#c8 = BatchNormalization()(c8)  # Añade Batch Normalization aquí
+
+u9 = Conv2DTranspose(16, (2,2), strides=(2, 2),  padding='same', kernel_initializer=initializer) (c8)
+u9 = concatenate([u9, c1], axis=3)
+c9 = Conv2D(16, (3,3),   activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer,  padding='same') (u9)
+c9 = Conv2D(16, (3,3),   activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer,  padding='same') (c9)
+#c9 = BatchNormalization()(c9)  # Añade Batch Normalization aquí
+
+# Conexión directa entre la entrada y la salida
+#direct_connection = concatenate([s, c9])
+
+# Última capa de salida
+outputs = Conv2D(1, (1,1), padding='same',  activation='sigmoid', kernel_initializer=initializer) (c9)
+
+model = Model(inputs=[inputs], outputs=[outputs])
+model.summary()
+
+
+Epoch 00020: val_loss improved from 0.02312 to 0.02192
+Epoch 00050: val_loss improved from 0.00899 to 0.00882
+
+
+Mean Squared Error on Train Data: 0.0028301892
+Mean Squared Error on Validation Data: 0.003942832
+Mean Squared Error on Test Data: 0.0039805174
+
++++++++++++++++++++++
+
+
+import os
+os.environ['TF_DETERMINISTIC_OPS'] = '1'
+import tensorflow as tf
+from tensorflow.keras.layers import Input, Conv2D, MaxPooling2D, Conv2DTranspose, concatenate, Lambda, BatchNormalization
+from tensorflow.keras.models import Model
+
+# Build U-Net model
+inputs = Input((IMG_HEIGHT, IMG_WIDTH, IMG_CHANNELS))
+s = Lambda(lambda x: x / 1) (inputs)
+
+from tensorflow.keras.initializers import HeNormal
+
+# Establecer la semilla para NumPy
+np.random.seed(1)
+
+# Establecer la semilla para TensorFlow (backend de Keras)
+tf.random.set_seed(1)
+
+initializer = HeNormal(seed=1)
+
+c1 = Conv2D(32, (3,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (s)
+c1 = Conv2D(32, (3,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (c1)
+#c1 = BatchNormalization()(c1)  # Añade Batch Normalization aquí
+p1 = MaxPooling2D((2, 2)) (c1)
+
+c2 = Conv2D(64, (3,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (p1)
+c2 = Conv2D(64, (3,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (c2)
+#c2 = BatchNormalization()(c2)  # Añade Batch Normalization aquí
+p2 = MaxPooling2D((4, 1)) (c2)
+
+c3 = Conv2D(128, (3,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (p2)
+c3 = Conv2D(128, (3,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (c3)
+#c3 = Dropout(0.1) (c3)
+#c3 = BatchNormalization()(c3)  # Añade Batch Normalization aquí
+p3 = MaxPooling2D((3, 2)) (c3)
+
+c4 = Conv2D(256, (3,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (p3)
+c4 = Conv2D(256, (3,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (c4)
+#c4 = BatchNormalization()(c4)  # Añade Batch Normalization aquí
+p4 = MaxPooling2D(pool_size=(3, 1)) (c4)
+
+c5 = Conv2D(512, (3,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (p4)
+c5 = Conv2D(512, (3,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (c5)
+
+u6 = Conv2DTranspose(256, (2,2), strides=(3, 1),  padding='same', kernel_initializer=initializer) (c5)
+u6 = concatenate([u6, c4])
+c6 = Conv2D(256, (3,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u6)
+c6 = Conv2D(256, (3,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (c6)
+#c6 = Dropout(0.1) (c6)
+#c6 = BatchNormalization()(c6)  # Añade Batch Normalization aquí
+
+u7 = Conv2DTranspose(128, (2,2), strides=(3, 2),  padding='same', kernel_initializer=initializer) (c6)
+u7 = concatenate([u7, c3])
+c7 = Conv2D(128, (3,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u7)
+c7 = Conv2D(128, (3,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (c7)
+#c7 = BatchNormalization()(c7)  # Añade Batch Normalization aquí
+
+u8 = Conv2DTranspose(64, (2,2), strides=(4, 1),  padding='same', kernel_initializer=initializer) (c7)
+u8 = concatenate([u8, c2])
+c8 = Conv2D(64, (3,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u8)
+c8 = Conv2D(64, (3,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (c8)
+#c8 = BatchNormalization()(c8)  # Añade Batch Normalization aquí
+
+u9 = Conv2DTranspose(32, (2,2), strides=(2, 2),  padding='same', kernel_initializer=initializer) (c8)
+u9 = concatenate([u9, c1], axis=3)
+c9 = Conv2D(32, (3,3),   activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer,  padding='same') (u9)
+c9 = Conv2D(32, (3,3),   activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer,  padding='same') (c9)
+#c9 = BatchNormalization()(c9)  # Añade Batch Normalization aquí
+
+# Conexión directa entre la entrada y la salida
+#direct_connection = concatenate([s, c9])
+
+# Última capa de salida
+outputs = Conv2D(1, (1,1), padding='same',  activation='sigmoid', kernel_initializer=initializer) (c9)
+
+model = Model(inputs=[inputs], outputs=[outputs])
+model.summary()
+
+Epoch 00020: val_loss improved from 0.01192 to 0.01143
+Epoch 00050: val_loss improved from 0.00463 to 0.00448
+
+Mean Squared Error on Train Data: 0.0026560675
+Mean Squared Error on Validation Data: 0.0033543846
+Mean Squared Error on Test Data: 0.0036918125
+
+
++++++++++++++++++++
+
+
+import os
+os.environ['TF_DETERMINISTIC_OPS'] = '1'
+import tensorflow as tf
+from tensorflow.keras.layers import Input, Conv2D, MaxPooling2D, Conv2DTranspose, concatenate, Lambda, BatchNormalization
+from tensorflow.keras.models import Model
+
+# Build U-Net model
+inputs = Input((IMG_HEIGHT, IMG_WIDTH, IMG_CHANNELS))
+s = Lambda(lambda x: x / 1) (inputs)
+
+from tensorflow.keras.initializers import HeNormal
+
+# Establecer la semilla para NumPy
+np.random.seed(1)
+
+# Establecer la semilla para TensorFlow (backend de Keras)
+tf.random.set_seed(1)
+
+initializer = HeNormal(seed=1)
+
+
+c1 = Conv2D(16, (75,3), strides=(2,1), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='valid') (s)
+#p1 = c1
+#c1 = Conv2D(16, (74,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (s)
+#c1 = BatchNormalization()(c1)  # Añade Batch Normalization aquí
+#p1 = MaxPooling2D((2, 2)) (c1)
+
+c2 = Conv2D(32, (75,3), strides=(2,2), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='valid') (c1)
+#c2 = BatchNormalization()(c2)  # Añade Batch Normalization aquí
+#p2 = MaxPooling2D((4, 1)) (c2)
+
+c3 = Conv2D(64, (75,3), strides=(2,2), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='valid')  (c2)
+c3 = Dropout(0.01) (c3)
+#c3 = BatchNormalization()(c3)  # Añade Batch Normalization aquí
+#p3 = MaxPooling2D((3, 2)) (c3)
+
+c4 = Conv2D(128, (75,3), strides=(2,2), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='valid')  (c3)
+#c4 = BatchNormalization()(c4)  # Añade Batch Normalization aquí
+#p4 = MaxPooling2D(pool_size=(3, 1)) (c4)
+
+c5 = Conv2D(256, (75,3), strides=(2,2), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='valid')  (c4)
+#c5 = BatchNormalization()(c5) 
+
+
+u6 = Conv2DTranspose(128, (76,4), strides=(2, 1),  padding='valid',  kernel_initializer=initializer) (c5)
+u6 = concatenate([u6, c4])
+#u6 = Conv2D(128, (40,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u6)
+u6 = Dropout(0.01) (u6)
+#u6 = BatchNormalization()(u6)  # Añade Batch Normalization aquí
+
+u7 = Conv2DTranspose(64, (75,3), strides=(2, 2),  padding='valid',  kernel_initializer=initializer) (u6)
+u7 = concatenate([u7, c3])
+#u7 = Conv2D(64, (41,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u7)
+#u7 = BatchNormalization()(u7)  # Añade Batch Normalization aquí
+
+u8 = Conv2DTranspose(32, (75,4), strides=(2, 2),  padding='valid', kernel_initializer=initializer) (u7)
+u8 = concatenate([u8, c2])
+#u8 = Conv2D(32, (41,4), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u8)
+#u8 = BatchNormalization()(u8)  # Añade Batch Normalization aquí
+
+u9 = Conv2DTranspose(16, (75,4), strides=(2, 2),  padding='valid',  kernel_initializer=initializer) (u8)
+u9 = concatenate([u9, c1], axis=3)
+u9 = Conv2DTranspose(16, (76,3), strides=(2, 1),  padding='valid',  kernel_initializer=initializer) (u9)
+#u9 = Conv2D(16, (41,4),   activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer,  padding='same') (u9)
+#u9 = BatchNormalization()(u9)  # Añade Batch Normalization aquí
+
+# Conexión directa entre la entrada y la salida
+direct_connection = concatenate([u9, s])
+
+# Última capa de salida
+outputs = Conv2D(1, (75,4), activation='sigmoid', padding='same', kernel_initializer=initializer) (direct_connection)
+
+model = Model(inputs=[inputs], outputs=[outputs])
+model.summary()
+
+Epoch 00020: val_loss improved from 0.01175 to 0.01126
+Epoch 00050: val_loss improved from 0.00681 to 0.00659
+
+Mean Squared Error on Train Data: 0.002022854
+Mean Squared Error on Validation Data: 0.0038218175
+Mean Squared Error on Test Data: 0.0033461675
+
+mejor a 24-4-2024
+
+La misma cogiendo datos a theta=90º
+
+Epoch 00020: val_loss improved from 0.01252 to 0.01195
+Epoch 00050: val_loss improved from 0.00685 to 0.00673
+
+Mean Squared Error on Train Data: 0.0020851938
+Mean Squared Error on Validation Data: 0.003622899
+Mean Squared Error on Test Data: 0.0032655923
+
+
++++++++++++++++++++++++++ POST AES con más datos
+
+import os
+os.environ['TF_DETERMINISTIC_OPS'] = '1'
+import tensorflow as tf
+from tensorflow.keras.layers import Input, Conv2D, MaxPooling2D, Conv2DTranspose, concatenate, Lambda, BatchNormalization
+from tensorflow.keras.models import Model
+
+# Build U-Net model
+inputs = Input((IMG_HEIGHT, IMG_WIDTH, IMG_CHANNELS))
+s = Lambda(lambda x: x / 1) (inputs)
+
+from tensorflow.keras.initializers import HeNormal
+
+# Establecer la semilla para NumPy
+np.random.seed(1)
+
+# Establecer la semilla para TensorFlow (backend de Keras)
+tf.random.set_seed(1)
+
+initializer = HeNormal(seed=1)
+
+c1 = Conv2D(16, (1500,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (s)
+#c1 = BatchNormalization()(c1)  # Añade Batch Normalization aquí
+p1 = MaxPooling2D((2, 2)) (c1)
+
+c2 = Conv2D(32, (750,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (p1)
+#c2 = BatchNormalization()(c2)  # Añade Batch Normalization aquí
+p2 = MaxPooling2D((4, 1)) (c2)
+
+c3 = Conv2D(64, (74,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (p2)
+#c3 = Dropout(0.1) (c3)
+#c3 = BatchNormalization()(c3)  # Añade Batch Normalization aquí
+p3 = MaxPooling2D((3, 2)) (c3)
+
+c4 = Conv2D(128, (74,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (p3)
+#c4 = BatchNormalization()(c4)  # Añade Batch Normalization aquí
+p4 = MaxPooling2D(pool_size=(3, 1)) (c4)
+
+c5 = Conv2D(256, (74,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (p4)
+
+u6 = Conv2DTranspose(128, (74,3), strides=(3, 1),  padding='same', kernel_initializer=initializer) (c5)
+u6 = concatenate([u6, c4])
+c6 = Conv2D(128, (74,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u6)
+#c6 = Dropout(0.1) (c6)
+#c6 = BatchNormalization()(c6)  # Añade Batch Normalization aquí
+
+u7 = Conv2DTranspose(64, (74,3), strides=(3, 2),  padding='same', kernel_initializer=initializer) (c6)
+u7 = concatenate([u7, c3])
+c7 = Conv2D(64, (74,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u7)
+#c7 = BatchNormalization()(c7)  # Añade Batch Normalization aquí
+
+u8 = Conv2DTranspose(32, (74,3), strides=(4, 1),  padding='same', kernel_initializer=initializer) (c7)
+u8 = concatenate([u8, c2])
+c8 = Conv2D(32, (74,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u8)
+#c8 = BatchNormalization()(c8)  # Añade Batch Normalization aquí
+
+u9 = Conv2DTranspose(16, (74,3), strides=(2, 2),  padding='same', kernel_initializer=initializer) (c8)
+u9 = concatenate([u9, c1], axis=3)
+c9 = Conv2D(16, (74,3),   activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer,  padding='same') (u9)
+#c9 = BatchNormalization()(c9)  # Añade Batch Normalization aquí
+
+# Conexión directa entre la entrada y la salida
+direct_connection = concatenate([s, c9])
+
+# Última capa de salida
+outputs = Conv2D(1, (74,3), padding='same',  activation='sigmoid', kernel_initializer=initializer) (direct_connection)
+
+model = Model(inputs=[inputs], outputs=[outputs])
+model.summary()
+
+Epoch 20: val_loss improved from 0.00380 to 0.00370
+Epoch 50: val_loss did not improve from 0.00267
+
+Mean Squared Error on Train Data: 0.0022136592
+Mean Squared Error on Validation Data: 0.0026652263
+Mean Squared Error on Test Data: 0.0035683017
+
+
+
++++
+import os
+os.environ['TF_DETERMINISTIC_OPS'] = '1'
+import tensorflow as tf
+from tensorflow.keras.layers import Input, Conv2D, MaxPooling2D, Conv2DTranspose, concatenate, Lambda, BatchNormalization
+from tensorflow.keras.models import Model
+
+# Build U-Net model
+inputs = Input((IMG_HEIGHT, IMG_WIDTH, IMG_CHANNELS))
+s = Lambda(lambda x: x / 1) (inputs)
+
+from tensorflow.keras.initializers import HeNormal
+
+# Establecer la semilla para NumPy
+np.random.seed(1)
+
+# Establecer la semilla para TensorFlow (backend de Keras)
+tf.random.set_seed(1)
+
+initializer = HeNormal(seed=1)
+
+
+c1 = Conv2D(16, (75,3), strides=(2,1), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='valid') (s)
+#p1 = c1
+#c1 = Conv2D(16, (74,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (s)
+#c1 = BatchNormalization()(c1)  # Añade Batch Normalization aquí
+#p1 = MaxPooling2D((2, 2)) (c1)
+
+c2 = Conv2D(32, (75,3), strides=(2,2), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='valid') (c1)
+#c2 = BatchNormalization()(c2)  # Añade Batch Normalization aquí
+#p2 = MaxPooling2D((4, 1)) (c2)
+
+c3 = Conv2D(64, (75,3), strides=(2,2), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='valid')  (c2)
+c3 = Dropout(0.01) (c3)
+#c3 = BatchNormalization()(c3)  # Añade Batch Normalization aquí
+#p3 = MaxPooling2D((3, 2)) (c3)
+
+c4 = Conv2D(128, (75,3), strides=(2,2), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='valid')  (c3)
+#c4 = BatchNormalization()(c4)  # Añade Batch Normalization aquí
+#p4 = MaxPooling2D(pool_size=(3, 1)) (c4)
+
+c5 = Conv2D(256, (75,3), strides=(2,2), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='valid')  (c4)
+#c5 = BatchNormalization()(c5) 
+
+
+u6 = Conv2DTranspose(128, (76,4), strides=(2, 1),  padding='valid',  kernel_initializer=initializer) (c5)
+u6 = concatenate([u6, c4])
+#u6 = Conv2D(128, (40,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u6)
+u6 = Dropout(0.01) (u6)
+#u6 = BatchNormalization()(u6)  # Añade Batch Normalization aquí
+
+u7 = Conv2DTranspose(64, (75,3), strides=(2, 2),  padding='valid',  kernel_initializer=initializer) (u6)
+u7 = concatenate([u7, c3])
+#u7 = Conv2D(64, (41,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u7)
+#u7 = BatchNormalization()(u7)  # Añade Batch Normalization aquí
+
+u8 = Conv2DTranspose(32, (75,4), strides=(2, 2),  padding='valid', kernel_initializer=initializer) (u7)
+u8 = concatenate([u8, c2])
+#u8 = Conv2D(32, (41,4), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u8)
+#u8 = BatchNormalization()(u8)  # Añade Batch Normalization aquí
+
+u9 = Conv2DTranspose(16, (75,4), strides=(2, 2),  padding='valid',  kernel_initializer=initializer) (u8)
+u9 = concatenate([u9, c1], axis=3)
+u9 = Conv2DTranspose(16, (76,3), strides=(2, 1),  padding='valid',  kernel_initializer=initializer) (u9)
+#u9 = Conv2D(16, (41,4),   activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer,  padding='same') (u9)
+#u9 = BatchNormalization()(u9)  # Añade Batch Normalization aquí
+
+# Conexión directa entre la entrada y la salida
+direct_connection = concatenate([u9, s])
+
+# Última capa de salida
+outputs = Conv2D(1, (75,4), activation='sigmoid', padding='same', kernel_initializer=initializer) (direct_connection)
+
+model = Model(inputs=[inputs], outputs=[outputs])
+model.summary()
+
+Epoch 20: val_loss improved from 0.00601 to 0.00575
+Epoch 50: val_loss improved from 0.00360 to 0.00355
+
+Mean Squared Error on Train Data: 0.0017756197
+Mean Squared Error on Validation Data: 0.00271634
+Mean Squared Error on Test Data: 0.004461147
+
++++++
+
+import os
+os.environ['TF_DETERMINISTIC_OPS'] = '1'
+import tensorflow as tf
+from tensorflow.keras.layers import Input, Conv2D, MaxPooling2D, Conv2DTranspose, concatenate, Lambda, BatchNormalization
+from tensorflow.keras.models import Model
+
+# Build U-Net model
+inputs = Input((IMG_HEIGHT, IMG_WIDTH, IMG_CHANNELS))
+s = Lambda(lambda x: x / 1) (inputs)
+
+from tensorflow.keras.initializers import HeNormal
+
+# Establecer la semilla para NumPy
+np.random.seed(1)
+
+# Establecer la semilla para TensorFlow (backend de Keras)
+tf.random.set_seed(1)
+
+initializer = HeNormal(seed=1)
+
+
+c1 = Conv2D(16, (75,3), strides=(2,1), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='valid') (s)
+#p1 = c1
+#c1 = Conv2D(16, (74,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (s)
+#c1 = BatchNormalization()(c1)  # Añade Batch Normalization aquí
+#p1 = MaxPooling2D((2, 2)) (c1)
+
+c2 = Conv2D(32, (75,3), strides=(2,2), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='valid') (c1)
+#c2 = BatchNormalization()(c2)  # Añade Batch Normalization aquí
+#p2 = MaxPooling2D((4, 1)) (c2)
+
+c3 = Conv2D(64, (75,3), strides=(2,2), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='valid')  (c2)
+#c3 = Dropout(0.01) (c3)
+#c3 = BatchNormalization()(c3)  # Añade Batch Normalization aquí
+#p3 = MaxPooling2D((3, 2)) (c3)
+
+c4 = Conv2D(128, (75,3), strides=(2,2), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='valid')  (c3)
+#c4 = BatchNormalization()(c4)  # Añade Batch Normalization aquí
+#p4 = MaxPooling2D(pool_size=(3, 1)) (c4)
+
+c5 = Conv2D(256, (75,3), strides=(2,2), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='valid')  (c4)
+#c5 = BatchNormalization()(c5) 
+
+
+u6 = Conv2DTranspose(128, (76,4), strides=(2, 1),  padding='valid',  kernel_initializer=initializer) (c5)
+u6 = concatenate([u6, c4])
+#u6 = Conv2D(128, (40,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u6)
+#u6 = Dropout(0.01) (u6)
+#u6 = BatchNormalization()(u6)  # Añade Batch Normalization aquí
+
+u7 = Conv2DTranspose(64, (75,3), strides=(2, 2),  padding='valid',  kernel_initializer=initializer) (u6)
+u7 = concatenate([u7, c3])
+#u7 = Conv2D(64, (41,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u7)
+#u7 = BatchNormalization()(u7)  # Añade Batch Normalization aquí
+
+u8 = Conv2DTranspose(32, (75,4), strides=(2, 2),  padding='valid', kernel_initializer=initializer) (u7)
+u8 = concatenate([u8, c2])
+u8 = Dropout(0.01) (u8)
+#u8 = Conv2D(32, (41,4), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u8)
+#u8 = BatchNormalization()(u8)  # Añade Batch Normalization aquí
+
+u9 = Conv2DTranspose(16, (75,4), strides=(2, 2),  padding='valid',  kernel_initializer=initializer) (u8)
+u9 = concatenate([u9, c1], axis=3)
+u9 = Conv2DTranspose(16, (76,3), strides=(2, 1),  padding='valid',  kernel_initializer=initializer) (u9)
+#u9 = Conv2D(16, (41,4),   activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer,  padding='same') (u9)
+#u9 = BatchNormalization()(u9)  # Añade Batch Normalization aquí
+
+# Conexión directa entre la entrada y la salida
+direct_connection = concatenate([u9, s])
+
+# Última capa de salida
+outputs = Conv2D(1, (75,4), activation='sigmoid', padding='same', kernel_initializer=initializer) (direct_connection)
+
+model = Model(inputs=[inputs], outputs=[outputs])
+model.summary()
+
+Epoch 20: val_loss improved from 0.00600 to 0.00575
+Epoch 50: val_loss improved from 0.00362 to 0.00355
+
+Mean Squared Error on Train Data: 0.0016542504
+Mean Squared Error on Validation Data: 0.002696892
+Mean Squared Error on Test Data: 0.0043644216
+
+++++++++++
+
+import os
+os.environ['TF_DETERMINISTIC_OPS'] = '1'
+import tensorflow as tf
+from tensorflow.keras.layers import Input, Conv2D, MaxPooling2D, Conv2DTranspose, concatenate, Lambda, BatchNormalization
+from tensorflow.keras.models import Model
+
+# Build U-Net model
+inputs = Input((IMG_HEIGHT, IMG_WIDTH, IMG_CHANNELS))
+s = Lambda(lambda x: x / 1) (inputs)
+
+from tensorflow.keras.initializers import HeNormal
+
+# Establecer la semilla para NumPy
+np.random.seed(1)
+
+# Establecer la semilla para TensorFlow (backend de Keras)
+tf.random.set_seed(1)
+
+initializer = HeNormal(seed=1)
+
+
+c1 = Conv2D(16, (75,3), strides=(2,1), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='valid') (s)
+#p1 = c1
+#c1 = Conv2D(16, (74,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (s)
+#c1 = BatchNormalization()(c1)  # Añade Batch Normalization aquí
+#p1 = MaxPooling2D((2, 2)) (c1)
+
+c2 = Conv2D(32, (75,3), strides=(2,2), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='valid') (c1)
+#c2 = BatchNormalization()(c2)  # Añade Batch Normalization aquí
+#p2 = MaxPooling2D((4, 1)) (c2)
+
+c3 = Conv2D(64, (75,3), strides=(2,2), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='valid')  (c2)
+#c3 = Dropout(0.01) (c3)
+#c3 = BatchNormalization()(c3)  # Añade Batch Normalization aquí
+#p3 = MaxPooling2D((3, 2)) (c3)
+
+c4 = Conv2D(128, (75,3), strides=(2,2), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='valid')  (c3)
+#c4 = BatchNormalization()(c4)  # Añade Batch Normalization aquí
+#p4 = MaxPooling2D(pool_size=(3, 1)) (c4)
+
+c5 = Conv2D(256, (75,3), strides=(2,2), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='valid')  (c4)
+#c5 = BatchNormalization()(c5) 
+
+
+u6 = Conv2DTranspose(128, (76,4), strides=(2, 1),  padding='valid',  kernel_initializer=initializer) (c5)
+u6 = concatenate([u6, c4])
+#u6 = Conv2D(128, (40,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u6)
+#u6 = Dropout(0.01) (u6)
+#u6 = BatchNormalization()(u6)  # Añade Batch Normalization aquí
+
+u7 = Conv2DTranspose(64, (75,3), strides=(2, 2),  padding='valid',  kernel_initializer=initializer) (u6)
+u7 = concatenate([u7, c3])
+#u7 = Conv2D(64, (41,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u7)
+#u7 = BatchNormalization()(u7)  # Añade Batch Normalization aquí
+
+u8 = Conv2DTranspose(32, (75,4), strides=(2, 2),  padding='valid', kernel_initializer=initializer) (u7)
+u8 = concatenate([u8, c2])
+#u8 = Dropout(0.01) (u8)
+#u8 = Conv2D(32, (41,4), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u8)
+#u8 = BatchNormalization()(u8)  # Añade Batch Normalization aquí
+
+u9 = Conv2DTranspose(16, (75,4), strides=(2, 2),  padding='valid',  kernel_initializer=initializer) (u8)
+u9 = concatenate([u9, c1], axis=3)
+u9 = Conv2DTranspose(16, (76,3), strides=(2, 1),  padding='valid',  kernel_initializer=initializer) (u9)
+#u9 = Conv2D(16, (41,4),   activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer,  padding='same') (u9)
+#u9 = BatchNormalization()(u9)  # Añade Batch Normalization aquí
+
+# Conexión directa entre la entrada y la salida
+direct_connection = concatenate([u9, s])
+
+# Última capa de salida
+outputs = Conv2D(1, (75,4), activation='sigmoid', padding='same', kernel_initializer=initializer) (direct_connection)
+
+model = Model(inputs=[inputs], outputs=[outputs])
+model.summary()
+
+
+Epoch 20: val_loss improved from 0.00602 to 0.00575
+Epoch 50: val_loss improved from 0.00361 to 0.00355
+
+Mean Squared Error on Train Data: 0.0023233271
+Mean Squared Error on Validation Data: 0.003026889
+Mean Squared Error on Test Data: 0.004331338
+
+
+
+
+++++++++++++
+
+u-net completa tal cual:
+
+import os
+os.environ['TF_DETERMINISTIC_OPS'] = '1'
+import tensorflow as tf
+from tensorflow.keras.layers import Input, Conv2D, MaxPooling2D, Conv2DTranspose, concatenate, Lambda, BatchNormalization
+from tensorflow.keras.models import Model
+
+# Build U-Net model
+inputs = Input((IMG_HEIGHT, IMG_WIDTH, IMG_CHANNELS))
+s = Lambda(lambda x: x / 1) (inputs)
+
+from tensorflow.keras.initializers import HeNormal
+
+# Establecer la semilla para NumPy
+np.random.seed(1)
+
+# Establecer la semilla para TensorFlow (backend de Keras)
+tf.random.set_seed(1)
+
+initializer = HeNormal(seed=1)
+
+
+c1 = Conv2D(16, (75,3), strides=(1,1), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (s)
+#c1 = Dropout(0.1) (c1)
+#c1 = Conv2D(16, (75,3), strides=(1,1), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (c1)
+#c1 = BatchNormalization()(c1)  # Añade Batch Normalization aquí
+#p1 = MaxPooling2D((2, 2)) (c1)
+
+c2 = Conv2D(16, (75,3), strides=(1,1), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (c1)
+#c2 = Dropout(0.1) (c2)
+c2 = Conv2D(32, (75,3), strides=(2,2), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='valid') (c2)
+#c2 = BatchNormalization()(c2)  # Añade Batch Normalization aquí
+#p2 = MaxPooling2D((4, 1)) (c2)
+
+c3 = Conv2D(32, (75,3), strides=(1,1), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same')  (c2)
+#c3 = Dropout(0.2) (c3)
+c3 = Conv2D(64, (75,3), strides=(2,2), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='valid')  (c3)
+#c3 = BatchNormalization()(c3)  # Añade Batch Normalization aquí
+#p3 = MaxPooling2D((3, 2)) (c3)
+
+c4 = Conv2D(64, (75,3), strides=(1,1), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same')  (c3)
+#c4 = Dropout(0.2) (c4)
+c4 = Conv2D(128, (75,3), strides=(2,2), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='valid')  (c4)
+#c4 = BatchNormalization()(c4)  # Añade Batch Normalization aquí
+#p4 = MaxPooling2D(pool_size=(3, 1)) (c4)
+
+c5 = Conv2D(128, (75,3), strides=(1,1), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same')  (c4)
+#c5 = Dropout(0.3) (c5)
+c5 = Conv2D(256, (75,3), strides=(2,2), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='valid')  (c5)
+#c5 = BatchNormalization()(c5) 
+
+
+u6 = Conv2DTranspose(128, (75,4), strides=(2, 1),  padding='valid',  kernel_initializer=initializer) (c5)
+u6 = concatenate([u6, c4])
+u6 = Conv2D(128, (76,4), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u6)
+#u6 = Dropout(0.1) (u6)
+u6 = Conv2D(128, (76,4), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u6)
+
+u7 = Conv2DTranspose(64, (75,4), strides=(2, 2),  padding='valid',  kernel_initializer=initializer) (u6)
+u7 = concatenate([u7, c3])
+u7 = Conv2D(64, (75,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u7)
+#u7 = Dropout(0.1) (u7)
+u7 = Conv2D(64, (75,5), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u7)
+
+
+u8 = Conv2DTranspose(32, (75,3), strides=(2, 2),  padding='valid', kernel_initializer=initializer) (u7)
+u8 = concatenate([u8, c2])
+u8 = Conv2D(32, (75,4), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u8)
+#u8 = Dropout(0.1) (u8)
+u8 = Conv2D(32, (75,4), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u8)
+
+u9 = Conv2DTranspose(16, (76,4), strides=(2, 2),  padding='valid',  kernel_initializer=initializer) (u8)
+u9 = concatenate([u9, c1], axis=3)
+u9 = Conv2D(16, (76,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u9)
+u9 = Conv2D(16, (76,3),  kernel_initializer=initializer, padding='same') (u9)
+#u9 = Dropout(0.1) (u9)
+#u9 = Conv2DTranspose(1, (76,3), strides=(2, 1),  padding='valid',  kernel_initializer=initializer) (u9)
+#u9 = Conv2D(16, (76,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u9)
+#u9 = Dropout(0.1) (u9)
+#u9 = Conv2D(16, (76,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u9)
+
+# Conexión directa entre la entrada y la salida
+#direct_connection = concatenate([u9, s])
+
+# Última capa de salida
+outputs = Conv2D(1, (1,1), activation='sigmoid', padding='same', kernel_initializer=initializer) (u9)
+
+model = Model(inputs=[inputs], outputs=[outputs])
+model.summary()
+
+Epoch 20: val_loss improved from 0.01060 to 0.00956
+Epoch 50: val_loss improved from 0.00432 to 0.00403
+
+
+Mean Squared Error on Train Data: 0.0035588618
+Mean Squared Error on Validation Data: 0.0032293769
+Mean Squared Error on Test Data: 0.004774732
+
+
+
+++++++++
+
+import os
+os.environ['TF_DETERMINISTIC_OPS'] = '1'
+import tensorflow as tf
+from tensorflow.keras.layers import Input, Conv2D, MaxPooling2D, Conv2DTranspose, concatenate, Lambda, BatchNormalization
+from tensorflow.keras.models import Model
+
+# Build U-Net model
+inputs = Input((IMG_HEIGHT, IMG_WIDTH, IMG_CHANNELS))
+s = Lambda(lambda x: x / 1) (inputs)
+
+from tensorflow.keras.initializers import HeNormal
+
+# Establecer la semilla para NumPy
+np.random.seed(1)
+
+# Establecer la semilla para TensorFlow (backend de Keras)
+tf.random.set_seed(1)
+
+initializer = HeNormal(seed=1)
+
+
+c1 = Conv2D(16, (75,3), strides=(1,1), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (s)
+#c1 = Dropout(0.1) (c1)
+#c1 = Conv2D(16, (75,3), strides=(1,1), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (c1)
+#c1 = BatchNormalization()(c1)  # Añade Batch Normalization aquí
+#p1 = MaxPooling2D((2, 2)) (c1)
+
+c2 = Conv2D(16, (75,3), strides=(1,1), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (c1)
+#c2 = Dropout(0.1) (c2)
+c2 = Conv2D(32, (75,3), strides=(2,2), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='valid') (c2)
+#c2 = BatchNormalization()(c2)  # Añade Batch Normalization aquí
+#p2 = MaxPooling2D((4, 1)) (c2)
+
+c3 = Conv2D(32, (75,3), strides=(1,1), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same')  (c2)
+#c3 = Dropout(0.2) (c3)
+c3 = Conv2D(64, (75,3), strides=(2,2), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='valid')  (c3)
+#c3 = BatchNormalization()(c3)  # Añade Batch Normalization aquí
+#p3 = MaxPooling2D((3, 2)) (c3)
+
+c4 = Conv2D(64, (75,3), strides=(1,1), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same')  (c3)
+#c4 = Dropout(0.2) (c4)
+c4 = Conv2D(128, (75,3), strides=(2,2), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='valid')  (c4)
+#c4 = BatchNormalization()(c4)  # Añade Batch Normalization aquí
+#p4 = MaxPooling2D(pool_size=(3, 1)) (c4)
+
+c5 = Conv2D(128, (75,3), strides=(1,1), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same')  (c4)
+#c5 = Dropout(0.3) (c5)
+c5 = Conv2D(256, (75,3), strides=(2,2), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='valid')  (c5)
+#c5 = BatchNormalization()(c5) 
+
+
+u6 = Conv2DTranspose(128, (75,4), strides=(2, 1),  padding='valid',  kernel_initializer=initializer) (c5)
+u6 = concatenate([u6, c4])
+u6 = Conv2D(128, (76,4), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u6)
+#u6 = Dropout(0.1) (u6)
+#u6 = Conv2D(256, (76,4), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u6)
+
+u7 = Conv2DTranspose(64, (75,4), strides=(2, 2),  padding='valid',  kernel_initializer=initializer) (u6)
+u7 = concatenate([u7, c3])
+u7 = Conv2D(64, (75,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u7)
+#u7 = Dropout(0.1) (u7)
+#u7 = Conv2D(128, (75,5), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u7)
+
+
+u8 = Conv2DTranspose(32, (75,3), strides=(2, 2),  padding='valid', kernel_initializer=initializer) (u7)
+u8 = concatenate([u8, c2])
+u8 = Conv2D(32, (75,4), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u8)
+#u8 = Dropout(0.1) (u8)
+#u8 = Conv2D(64, (75,4), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u8)
+
+u9 = Conv2DTranspose(16, (76,4), strides=(2, 2),  padding='valid',  kernel_initializer=initializer) (u8)
+u9 = concatenate([u9, c1], axis=3)
+#u9 = Conv2D(32, (76,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u9)
+u9 = Conv2D(16, (76,3),  kernel_initializer=initializer, padding='same') (u9)
+#u9 = Dropout(0.1) (u9)
+#u9 = Conv2DTranspose(1, (76,3), strides=(2, 1),  padding='valid',  kernel_initializer=initializer) (u9)
+#u9 = Conv2D(16, (76,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u9)
+#u9 = Dropout(0.1) (u9)
+#u9 = Conv2D(16, (76,3), activation=tf.keras.layers.LeakyReLU(alpha=0.3), kernel_initializer=initializer, padding='same') (u9)
+
+# Conexión directa entre la entrada y la salida
+#direct_connection = concatenate([u9, s])
+
+# Última capa de salida
+outputs = Conv2D(1, (1,1), activation='sigmoid', padding='same', kernel_initializer=initializer) (u9)
+
+model = Model(inputs=[inputs], outputs=[outputs])
+model.summary()
+
+Epoch 20: val_loss improved from 0.00802 to 0.00675
+Epoch 50: val_loss improved from 0.00373 to 0.00371
+
+1/1 [==============================] - 19s 19s/step
+1/1 [==============================] - 5s 5s/step
+1/1 [==============================] - 6s 6s/step
+

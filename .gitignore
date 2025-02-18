@@ -1,0 +1,6 @@
+*.h5
+models/*.h5
+tras AES/*.h5
+
+# Files over 100 MB (Automatically added)
+tras AES/modelo_inpainting.h5

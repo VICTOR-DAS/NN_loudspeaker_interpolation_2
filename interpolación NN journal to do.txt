@@ -1,0 +1,38 @@
+
+
+Corrección del error con Tilka: fuera del entrenamiento y dentro. Lo utilizo en crossover design
+
+
+Hacerlo también incluyendo theta=90º: Prácticamente no se nota??
+
+Hacer un test con algo que no sea un array: no mejora
+Repetir con más datos: pendiente
+
+
+https://medium.datadriveninvestor.com/an-overview-on-u-net-architecture-d6caabf7caa4
+
+hacer con fase
+
+
+Estructura de un artículo similar publicado en JASA: Modeling individual head-related transfer functions from sparsemeasurements using a convolutional neural network
+1. Introduction, que es una revisión de literatura
+2. Method, en este caso además de la u-net para spectro y itd, toman varias configuraciones de medidas ( de menos a más medidas) para luego comparar resultados. En mi caso sólo polare o polares + theta90, por ejemplo
+	- toma un Baseline method para comparar: interpolación con k-neighbours?? Spherical harmonics??
+
+3 experimentos objetivos
+	- valora con spectral distortion, en función de la frecuencia, de cuántas medidas reales coge, y contra el base-line
+
+4 experimentos subjetivos
+	- aquí no entraríamos
+5 discusión
+	- compara los resultados con todo lo comparable (todo lo publicado)
+	- yo tendría que comparar también con lo exigible por AES y también por todo lo exigible para simular correctamente según Feitel, por ejemplo. 
+6 conclusión
+	- A better network model can be explored in future work tofurther reduce the sparse measurements.
+
+agradecimientos
+
+
+
+
+
